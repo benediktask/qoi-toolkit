@@ -55,7 +55,7 @@ async function encode() {
     let prevPixelBlue = 0;
     let prevPixelAlpha = 255;
 
-    for (let offset = 0; offset < rawPixelsBufferCopy.byteLength - IMAGE_CHANNEL_COUNT; offset += IMAGE_CHANNEL_COUNT) {
+    for (let offset = 0; offset < rawPixelsBufferCopy.byteLength; offset += IMAGE_CHANNEL_COUNT) {
         const [r, g, b, a] = rawPixelsBufferCopy.subarray(offset, offset + IMAGE_CHANNEL_COUNT);
 
         if (r === prevPixelRed && g === prevPixelGreen && b === prevPixelBlue && a === prevPixelAlpha) {
