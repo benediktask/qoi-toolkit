@@ -8,11 +8,11 @@
   "main": "src/encode.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "npx tsx watch ./src/encode.ts"
+    "dev": "npx tsx watch ./src/encode.ts",
   },
   "devDependencies": {
     "@tsconfig/node-ts": "^23.6.4",
-    "@tsconfig/node24": "^24.0.4",
+    "@tsconfig/node26": "^26.0.0",
     "@types/node": "^25.9.1",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"

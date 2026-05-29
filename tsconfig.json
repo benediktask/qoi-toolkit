@@ -1,12 +1,17 @@
 {
   "extends": [
-    "@tsconfig/node24/tsconfig.json",
+    "@tsconfig/node26/tsconfig.json",
     "@tsconfig/node-ts/tsconfig.json"
   ],
   "compilerOptions": {
     "lib": [
       "DOM"
     ],
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
+  "include": [
+    "src/**/*"
+  ],
 }
