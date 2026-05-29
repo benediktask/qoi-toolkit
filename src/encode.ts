@@ -8,6 +8,12 @@ import { hrtime } from 'node:process';
 // const IMAGE_HEIGHT = 588;
 // const IMAGE_CHANNEL_COUNT = 4;
 
+// cat.bin
+const FILENAME = 'cat';
+const IMAGE_WIDTH = 3000;
+const IMAGE_HEIGHT = 4000;
+const IMAGE_CHANNEL_COUNT = 4;
+
 function hashIndex(r: number, g: number, b: number, a: number): number {
     return (r * 3 + g * 5 + b * 7 + a * 11) % 64;
 }
@@ -16,6 +22,16 @@ function finalizeRun(output: Uint8Array[], trackers: { runLength: number }, cond
     if (condition(trackers.runLength) === true) {
         output.push(new Uint8Array([0b11000000 | (trackers.runLength - 1)]));
         trackers.runLength = 0;
+    }
+}
+
+function writePixel(output: Uint8Array[], r: number, g: number, b: number, a: number, rp: number, gp: number, bp: number, ap: number) {
+    if (a === ap) {
+        const QOI_OP_RGB_CHUNK = new Uint8Array([0b11111110, r, g, b]);
+        output.push(QOI_OP_RGB_CHUNK);
+    } else {
+        const QOI_OP_RGBA_CHUNK = new Uint8Array([0b11111111, r, g, b, a]);
+        output.push(QOI_OP_RGBA_CHUNK);
     }
 }
 
@@ -81,12 +97,10 @@ async function encode() {
                     const QOI_OP_INDEX = new Uint8Array([0b00000000 | currentHash]);
                     outputChunks.push(QOI_OP_INDEX);
                 } else {
-                    const QOI_OP_RGBA_CHUNK = new Uint8Array([0b11111111, r, g, b, a]);
-                    outputChunks.push(QOI_OP_RGBA_CHUNK);
+                    writePixel(outputChunks, r, g, b, a, prevPixelRed, prevPixelGreen, prevPixelBlue, prevPixelAlpha);
                 }
             } else {
-                const QOI_OP_RGBA_CHUNK = new Uint8Array([0b11111111, r, g, b, a]);
-                outputChunks.push(QOI_OP_RGBA_CHUNK);
+                writePixel(outputChunks, r, g, b, a, prevPixelRed, prevPixelGreen, prevPixelBlue, prevPixelAlpha);
             }
         }
 
