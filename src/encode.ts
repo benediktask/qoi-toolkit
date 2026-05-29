@@ -30,7 +30,7 @@ function writeIndex(output: Uint8Array[], index: number) {
     output.push(QOI_OP_INDEX);
 }
 
-function writePixel(output: Uint8Array[], r: number, g: number, b: number, a: number, rp: number, gp: number, bp: number, ap: number) {
+function writePixel(output: Uint8Array[], r: number, g: number, b: number, a: number, ap: number) {
     if (a === ap) {
         const QOI_OP_RGB_CHUNK = new Uint8Array([0b11111110, r, g, b]);
         output.push(QOI_OP_RGB_CHUNK);
@@ -80,7 +80,7 @@ async function encode() {
     let prevPixelBlue = 0;
     let prevPixelAlpha = 255;
 
-    let runningPixelArray: number[][] = Array.from({ length: 64 }, () => ([]));
+    let runningPixelArray: number[][] = Array.from({ length: 64 }, () => ([0, 0, 0, 0]));
 
     for (let offset = 0; offset < rawPixelsBufferCopy.byteLength; offset += IMAGE_CHANNEL_COUNT) {
         const [r, g, b, a] = rawPixelsBufferCopy.subarray(offset, offset + IMAGE_CHANNEL_COUNT);
@@ -98,7 +98,32 @@ async function encode() {
             if (storedPixel[0] === r && storedPixel[1] === g && storedPixel[2] === b && storedPixel[3] === a) {
                 writeIndex(outputChunks, currentHash);
             } else {
-                writePixel(outputChunks, r, g, b, a, prevPixelRed, prevPixelGreen, prevPixelBlue, prevPixelAlpha);
+                const dr = r - prevPixelRed;
+                const dg = g - prevPixelGreen;
+                const db = b - prevPixelBlue;
+
+                const ddrdg = dr - dg;
+                const ddbdg = db - dg;
+
+                if (storedPixel[3] === a && -8 <= ddrdg && ddrdg <= 7 && -32 <= dg && dg <= 31 && -8 <= ddbdg && ddbdg <= 7) {
+                    const QOI_OP_LUMA_GREEN_BIAS = 32;
+                    const QOI_OP_LUMA_RED_BLUE_BIAS = 8;
+                    const QOI_OP_LUMA_CHUNK = new Uint8Array([
+                        0b10000000 | (dg + QOI_OP_LUMA_GREEN_BIAS),
+                        0b00000000 | ((ddrdg + QOI_OP_LUMA_RED_BLUE_BIAS) << 4) | (ddbdg + QOI_OP_LUMA_RED_BLUE_BIAS),
+                    ]);
+
+                    outputChunks.push(QOI_OP_LUMA_CHUNK);
+                } else if (storedPixel[3] === a && -2 <= dr && dr <= 1 && -2 <= dg && dg <= 1 && -2 <= db && db <= 1) {
+                    const QOI_OP_DIFF_BIAS = 2;
+                    const QOI_OP_DIFF_CHUNK = new Uint8Array([
+                        0b01000000 | ((dr + QOI_OP_DIFF_BIAS) << 4) | ((dg + QOI_OP_DIFF_BIAS) << 2) | (db + QOI_OP_DIFF_BIAS)
+                    ]);
+
+                    outputChunks.push(QOI_OP_DIFF_CHUNK);
+                } else {
+                    writePixel(outputChunks, r, g, b, a, prevPixelAlpha);
+                }
             }
         }
 
