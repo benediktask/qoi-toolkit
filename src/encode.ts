@@ -30,6 +30,26 @@ function writeIndex(output: Uint8Array[], index: number) {
     output.push(QOI_OP_INDEX);
 }
 
+function writeLuma(output: Uint8Array[], ddrdg: number, dg: number, ddbdg: number) {
+    const QOI_OP_LUMA_GREEN_BIAS = 32;
+    const QOI_OP_LUMA_RED_BLUE_BIAS = 8;
+    const QOI_OP_LUMA_CHUNK = new Uint8Array([
+        0b10000000 | (dg + QOI_OP_LUMA_GREEN_BIAS),
+        0b00000000 | ((ddrdg + QOI_OP_LUMA_RED_BLUE_BIAS) << 4) | (ddbdg + QOI_OP_LUMA_RED_BLUE_BIAS),
+    ]);
+
+    output.push(QOI_OP_LUMA_CHUNK);
+}
+
+function writeDiff(output: Uint8Array[], dr: number, dg: number, db: number) {
+    const QOI_OP_DIFF_BIAS = 2;
+    const QOI_OP_DIFF_CHUNK = new Uint8Array([
+        0b01000000 | ((dr + QOI_OP_DIFF_BIAS) << 4) | ((dg + QOI_OP_DIFF_BIAS) << 2) | (db + QOI_OP_DIFF_BIAS)
+    ]);
+
+    output.push(QOI_OP_DIFF_CHUNK);
+}
+
 function writePixel(output: Uint8Array[], r: number, g: number, b: number, a: number, ap: number) {
     if (a === ap) {
         const QOI_OP_RGB_CHUNK = new Uint8Array([0b11111110, r, g, b]);
@@ -41,7 +61,7 @@ function writePixel(output: Uint8Array[], r: number, g: number, b: number, a: nu
 }
 
 async function encode() {
-    const start = process.hrtime.bigint();
+    const start = hrtime.bigint();
     const rawPixelsBuffer = await fs.readFile(path.join(import.meta.dirname, '..', 'assets', `${FILENAME}.bin`));
     const rawPixelsBufferCopy = new Uint8Array(rawPixelsBuffer.buffer, rawPixelsBuffer.byteOffset, rawPixelsBuffer.byteLength);
 
@@ -95,7 +115,7 @@ async function encode() {
             finalizeRun(outputChunks, trackers, runLength => runLength > 0);
 
             const storedPixel = runningPixelArray[currentHash];
-            if (storedPixel[0] === r && storedPixel[1] === g && storedPixel[2] === b && storedPixel[3] === a) {
+            if (storedPixel[3] === a && storedPixel[0] === r && storedPixel[1] === g && storedPixel[2] === b) {
                 writeIndex(outputChunks, currentHash);
             } else {
                 const dr = r - prevPixelRed;
@@ -106,21 +126,9 @@ async function encode() {
                 const ddbdg = db - dg;
 
                 if (storedPixel[3] === a && -8 <= ddrdg && ddrdg <= 7 && -32 <= dg && dg <= 31 && -8 <= ddbdg && ddbdg <= 7) {
-                    const QOI_OP_LUMA_GREEN_BIAS = 32;
-                    const QOI_OP_LUMA_RED_BLUE_BIAS = 8;
-                    const QOI_OP_LUMA_CHUNK = new Uint8Array([
-                        0b10000000 | (dg + QOI_OP_LUMA_GREEN_BIAS),
-                        0b00000000 | ((ddrdg + QOI_OP_LUMA_RED_BLUE_BIAS) << 4) | (ddbdg + QOI_OP_LUMA_RED_BLUE_BIAS),
-                    ]);
-
-                    outputChunks.push(QOI_OP_LUMA_CHUNK);
+                    writeLuma(outputChunks, ddrdg, dg, ddbdg);
                 } else if (storedPixel[3] === a && -2 <= dr && dr <= 1 && -2 <= dg && dg <= 1 && -2 <= db && db <= 1) {
-                    const QOI_OP_DIFF_BIAS = 2;
-                    const QOI_OP_DIFF_CHUNK = new Uint8Array([
-                        0b01000000 | ((dr + QOI_OP_DIFF_BIAS) << 4) | ((dg + QOI_OP_DIFF_BIAS) << 2) | (db + QOI_OP_DIFF_BIAS)
-                    ]);
-
-                    outputChunks.push(QOI_OP_DIFF_CHUNK);
+                    writeDiff(outputChunks, dr, dg, db);
                 } else {
                     writePixel(outputChunks, r, g, b, a, prevPixelAlpha);
                 }
@@ -153,7 +161,7 @@ async function encode() {
     ]));
 
     await fs.writeFile(path.join(import.meta.dirname, '..', 'assets', `${FILENAME}.qoi`), Buffer.concat(outputChunks));
-    console.log(`Process took: ${(process.hrtime.bigint() - start) / 1000n / 1000n} ms`);
+    console.log(`Process took: ${(hrtime.bigint() - start) / 1000n / 1000n} ms`);
 }
 
 await encode();
