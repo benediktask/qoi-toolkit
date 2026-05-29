@@ -1,18 +1,61 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { hrtime } from 'node:process';
+import { parseArgs } from 'node:util';
 
 // sample.bin
-// const FILENAME = 'sample';
+// const FILEPATH = 'sample';
 // const IMAGE_WIDTH = 735;
 // const IMAGE_HEIGHT = 588;
 // const IMAGE_CHANNEL_COUNT = 4;
 
 // cat.bin
-const FILENAME = 'cat';
-const IMAGE_WIDTH = 3000;
-const IMAGE_HEIGHT = 4000;
-const IMAGE_CHANNEL_COUNT = 4;
+// const FILEPATH = 'cat';
+// const IMAGE_WIDTH = 3000;
+// const IMAGE_HEIGHT = 4000;
+// const IMAGE_CHANNEL_COUNT = 4;
+
+interface Options {
+    FILEPATH: string,
+    IMAGE_WIDTH: number,
+    IMAGE_HEIGHT: number,
+    IMAGE_CHANNEL_COUNT?: number,
+};
+
+function parseOptions(): Options {
+    try {
+        const { positionals } = parseArgs({ allowPositionals: true });
+
+        const [FILEPATH, IMAGE_WIDTH, IMAGE_HEIGHT, IMAGE_CHANNEL_COUNT = '4', ...extra] = positionals;
+
+        // 3. Validation: Ensure the required arguments are present
+        if (!FILEPATH || !IMAGE_WIDTH || !IMAGE_HEIGHT) {
+            console.error('Error: Missing required positional arguments.');
+            console.error('Usage: node script.js <FILEPATH> <IMAGE_WIDTH> <IMAGE_HEIGHT> [IMAGE_CHANNEL_COUNT=4]');
+            process.exit(1);
+        }
+
+        const argsDictionary = {
+            FILEPATH,
+            IMAGE_WIDTH: parseInt(IMAGE_WIDTH, 10),
+            IMAGE_HEIGHT: parseInt(IMAGE_HEIGHT, 10),
+            IMAGE_CHANNEL_COUNT: parseInt(IMAGE_CHANNEL_COUNT, 10),
+        };
+
+        if (extra.length > 0) {
+            console.error(`Error: Too many arguments provided: ${extra.join(', ')}`);
+            process.exit(1);
+        }
+
+        return argsDictionary;
+    } catch (error) {
+        if (error instanceof Error) {
+            console.error('Parsing error:', error.message);
+        }
+
+        process.exit(1);
+    }
+}
 
 function hashIndex(r: number, g: number, b: number, a: number): number {
     return (r * 3 + g * 5 + b * 7 + a * 11) % 64;
@@ -60,9 +103,9 @@ function writePixel(output: Uint8Array[], r: number, g: number, b: number, a: nu
     }
 }
 
-async function encode() {
+async function encode({ FILEPATH, IMAGE_WIDTH, IMAGE_HEIGHT, IMAGE_CHANNEL_COUNT }: Options) {
     const start = hrtime.bigint();
-    const rawPixelsBuffer = await fs.readFile(path.join(import.meta.dirname, '..', 'assets', `${FILENAME}.bin`));
+    const rawPixelsBuffer = await fs.readFile(path.join(process.cwd(), FILEPATH));
     const rawPixelsBufferCopy = new Uint8Array(rawPixelsBuffer.buffer, rawPixelsBuffer.byteOffset, rawPixelsBuffer.byteLength);
 
     const outputChunks = [
@@ -102,8 +145,8 @@ async function encode() {
 
     let runningPixelArray: number[][] = Array.from({ length: 64 }, () => ([0, 0, 0, 0]));
 
-    for (let offset = 0; offset < rawPixelsBufferCopy.byteLength; offset += IMAGE_CHANNEL_COUNT) {
-        const [r, g, b, a] = rawPixelsBufferCopy.subarray(offset, offset + IMAGE_CHANNEL_COUNT);
+    for (let offset = 0; offset < rawPixelsBufferCopy.byteLength; offset += IMAGE_CHANNEL_COUNT!) {
+        const [r, g, b, a] = rawPixelsBufferCopy.subarray(offset, offset + IMAGE_CHANNEL_COUNT!);
 
         const currentHash = hashIndex(r, g, b, a);
 
@@ -160,10 +203,8 @@ async function encode() {
         0b00000001,
     ]));
 
-    await fs.writeFile(path.join(import.meta.dirname, '..', 'assets', `${FILENAME}.qoi`), Buffer.concat(outputChunks));
+    await fs.writeFile(path.join(process.cwd(), path.parse(FILEPATH).dir, `${path.parse(FILEPATH).name}.qoi`), Buffer.concat(outputChunks));
     console.log(`Process took: ${(hrtime.bigint() - start) / 1000n / 1000n} ms`);
 }
 
-await encode();
-
-// export default encode;
+await encode(parseOptions());
