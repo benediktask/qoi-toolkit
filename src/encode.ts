@@ -8,6 +8,10 @@ import { hrtime } from 'node:process';
 // const IMAGE_HEIGHT = 588;
 // const IMAGE_CHANNEL_COUNT = 4;
 
+function hashIndex(r: number, g: number, b: number, a: number): number {
+    return (r * 3 + g * 5 + b * 7 + a * 11) % 64;
+}
+
 function finalizeRun(output: Uint8Array[], trackers: { runLength: number }, condition: (runLength: number) => boolean) {
     if (condition(trackers.runLength) === true) {
         output.push(new Uint8Array([0b11000000 | (trackers.runLength - 1)]));
@@ -55,8 +59,12 @@ async function encode() {
     let prevPixelBlue = 0;
     let prevPixelAlpha = 255;
 
+    let runningPixelArray: number[][] = Array.from({ length: 64 }, () => ([]));
+
     for (let offset = 0; offset < rawPixelsBufferCopy.byteLength; offset += IMAGE_CHANNEL_COUNT) {
         const [r, g, b, a] = rawPixelsBufferCopy.subarray(offset, offset + IMAGE_CHANNEL_COUNT);
+
+        const currentHash = hashIndex(r, g, b, a);
 
         if (r === prevPixelRed && g === prevPixelGreen && b === prevPixelBlue && a === prevPixelAlpha) {
             trackers.runLength++;
@@ -65,9 +73,27 @@ async function encode() {
         } else {
             finalizeRun(outputChunks, trackers, runLength => runLength > 0);
 
-            const QOI_RGBA_OP_CHUNK = new Uint8Array([0b11111111, r, g, b, a]);
-            outputChunks.push(QOI_RGBA_OP_CHUNK);
+            const storedPixel = runningPixelArray[currentHash];
+            if (storedPixel.length > 0) {
+                const [sr, sg, sb, sa] = storedPixel;
+
+                if (r === sr && g === sg && b === sb && a === sa) {
+                    const QOI_OP_INDEX = new Uint8Array([0b00000000 | currentHash]);
+                    outputChunks.push(QOI_OP_INDEX);
+                } else {
+                    const QOI_OP_RGBA_CHUNK = new Uint8Array([0b11111111, r, g, b, a]);
+                    outputChunks.push(QOI_OP_RGBA_CHUNK);
+                }
+            } else {
+                const QOI_OP_RGBA_CHUNK = new Uint8Array([0b11111111, r, g, b, a]);
+                outputChunks.push(QOI_OP_RGBA_CHUNK);
+            }
         }
+
+        runningPixelArray[currentHash][0] = r;
+        runningPixelArray[currentHash][1] = g;
+        runningPixelArray[currentHash][2] = b;
+        runningPixelArray[currentHash][3] = a;
 
         prevPixelRed = r;
         prevPixelGreen = g;
