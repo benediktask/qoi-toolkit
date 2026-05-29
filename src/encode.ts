@@ -25,6 +25,11 @@ function finalizeRun(output: Uint8Array[], trackers: { runLength: number }, cond
     }
 }
 
+function writeIndex(output: Uint8Array[], index: number) {
+    const QOI_OP_INDEX = new Uint8Array([0b00000000 | index]);
+    output.push(QOI_OP_INDEX);
+}
+
 function writePixel(output: Uint8Array[], r: number, g: number, b: number, a: number, rp: number, gp: number, bp: number, ap: number) {
     if (a === ap) {
         const QOI_OP_RGB_CHUNK = new Uint8Array([0b11111110, r, g, b]);
@@ -90,15 +95,8 @@ async function encode() {
             finalizeRun(outputChunks, trackers, runLength => runLength > 0);
 
             const storedPixel = runningPixelArray[currentHash];
-            if (storedPixel.length > 0) {
-                const [sr, sg, sb, sa] = storedPixel;
-
-                if (r === sr && g === sg && b === sb && a === sa) {
-                    const QOI_OP_INDEX = new Uint8Array([0b00000000 | currentHash]);
-                    outputChunks.push(QOI_OP_INDEX);
-                } else {
-                    writePixel(outputChunks, r, g, b, a, prevPixelRed, prevPixelGreen, prevPixelBlue, prevPixelAlpha);
-                }
+            if (storedPixel[0] === r && storedPixel[1] === g && storedPixel[2] === b && storedPixel[3] === a) {
+                writeIndex(outputChunks, currentHash);
             } else {
                 writePixel(outputChunks, r, g, b, a, prevPixelRed, prevPixelGreen, prevPixelBlue, prevPixelAlpha);
             }
