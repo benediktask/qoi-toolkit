@@ -93,8 +93,8 @@ function writeDiff(output: Uint8Array[], dr: number, dg: number, db: number) {
     output.push(QOI_OP_DIFF_CHUNK);
 }
 
-function writePixel(output: Uint8Array[], r: number, g: number, b: number, a: number, ap: number) {
-    if (a === ap) {
+function writePixel(output: Uint8Array[], r: number, g: number, b: number, a: number, da: number) {
+    if (da === 0) {
         const QOI_OP_RGB_CHUNK = new Uint8Array([0b11111110, r, g, b]);
         output.push(QOI_OP_RGB_CHUNK);
     } else {
@@ -161,27 +161,28 @@ async function encode({ FILEPATH, IMAGE_WIDTH, IMAGE_HEIGHT, IMAGE_CHANNEL_COUNT
             if (storedPixel[3] === a && storedPixel[0] === r && storedPixel[1] === g && storedPixel[2] === b) {
                 writeIndex(outputChunks, currentHash);
             } else {
+                runningPixelArray[currentHash][0] = r;
+                runningPixelArray[currentHash][1] = g;
+                runningPixelArray[currentHash][2] = b;
+                runningPixelArray[currentHash][3] = a;
+
                 const dr = r - prevPixelRed;
                 const dg = g - prevPixelGreen;
                 const db = b - prevPixelBlue;
+                const da = a - prevPixelAlpha;
 
                 const ddrdg = dr - dg;
                 const ddbdg = db - dg;
 
-                if (storedPixel[3] === a && -8 <= ddrdg && ddrdg <= 7 && -32 <= dg && dg <= 31 && -8 <= ddbdg && ddbdg <= 7) {
-                    writeLuma(outputChunks, ddrdg, dg, ddbdg);
-                } else if (storedPixel[3] === a && -2 <= dr && dr <= 1 && -2 <= dg && dg <= 1 && -2 <= db && db <= 1) {
+                if (da === 0 && -2 <= dr && dr <= 1 && -2 <= dg && dg <= 1 && -2 <= db && db <= 1) {
                     writeDiff(outputChunks, dr, dg, db);
+                } else if (da === 0 && -8 <= ddrdg && ddrdg <= 7 && -32 <= dg && dg <= 31 && -8 <= ddbdg && ddbdg <= 7) {
+                    writeLuma(outputChunks, ddrdg, dg, ddbdg);
                 } else {
-                    writePixel(outputChunks, r, g, b, a, prevPixelAlpha);
+                    writePixel(outputChunks, r, g, b, a, da);
                 }
             }
         }
-
-        runningPixelArray[currentHash][0] = r;
-        runningPixelArray[currentHash][1] = g;
-        runningPixelArray[currentHash][2] = b;
-        runningPixelArray[currentHash][3] = a;
 
         prevPixelRed = r;
         prevPixelGreen = g;
